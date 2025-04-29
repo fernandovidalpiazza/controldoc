@@ -50,20 +50,50 @@ export default function DocumentosEmpresaForm() {
 
   const handleUpload = async () => {
     if (!selectedDocument || !file) return;
+    
+    // Cerrar el diálogo de confirmación antes de iniciar la carga
+    // Esto evita problemas de DOM cuando el componente se desmonta durante la operación
+    setConfirmDialogOpen(false);
+    
+    // Indicar que estamos cargando
     setUploading(true);
+    
     try {
+      // Crear FormData y agregar el archivo
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch("http://localhost:3000/api/upload", { method: "POST", body: formData });
-      if (!response.ok) throw new Error("Error uploading file");
-      const { url: downloadURL } = await response.json();
-
+      
+      // Realizar la petición al servidor
+      const response = await fetch("http://localhost:3000/api/upload", { 
+        method: "POST", 
+        body: formData 
+      });
+      
+      // Verificar si la respuesta es exitosa
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Error uploading file: ${errorData}`);
+      }
+      
+      // Obtener los datos de la respuesta
+      const responseData = await response.json();
+      
+      // Extraer la URL del archivo (corregido para manejar el formato de respuesta actual)
+      const downloadURL = responseData.url?.url || responseData.url;
+      
+      if (!downloadURL) {
+        throw new Error('URL de descarga no disponible en la respuesta');
+      }
+      
+      // Obtener los datos del documento seleccionado
       const selectedDocData = requiredDocuments.find(doc => doc.id === selectedDocument);
+      
+      // Crear el objeto del nuevo documento
       const newDoc = {
         companyId,
         requiredDocumentId: selectedDocument,
         documentName: selectedDocData?.name || "Documento",
-        entityType: "Empresa",
+        entityType: "company", // Corregido de "Empresa" a "company" para mantener consistencia
         entityId: companyId,
         entityName: userCompanyData?.companyName || "Empresa",
         fileURL: downloadURL,
@@ -76,13 +106,26 @@ export default function DocumentosEmpresaForm() {
         expirationDate: calculateInitialExpirationDate(selectedDocData)
       };
 
+      // Guardar el documento en Firestore
       await addDoc(collection(db, "uploadedDocuments"), newDoc);
+      
+      // Actualizar la UI para mostrar el documento recién subido
+      setUploadedDocuments(prev => [...prev, {
+        ...newDoc,
+        id: 'temp-' + Date.now(), // ID temporal hasta que se recargue la página
+        uploadedAt: { seconds: Date.now() / 1000 } // Simulamos el timestamp para la UI
+      }]);
+      
+      // Reiniciar el formulario
       resetForm();
+      
+      // Mostrar mensaje de éxito
+      alert('Documento subido correctamente');
     } catch (error) {
       console.error("Upload error:", error);
+      alert(`Error al subir el archivo: ${error.message}`);
     } finally {
       setUploading(false);
-      setConfirmDialogOpen(false);
     }
   };
 
@@ -138,18 +181,40 @@ export default function DocumentosEmpresaForm() {
         />
       )}
 
-      <Dialog open={confirmDialogOpen} onClose={() => setConfirmDialogOpen(false)}>
-        <DialogTitle>Confirmar envío</DialogTitle>
-        <DialogContent>
-          ¿Está seguro que desea subir este documento?
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDialogOpen(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={handleUpload} disabled={uploading}>
-            {uploading ? <CircularProgress size={24} /> : "Confirmar y Subir"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {confirmDialogOpen && (
+        <Dialog 
+          open={true} 
+          onClose={() => !uploading && setConfirmDialogOpen(false)}
+          disableEscapeKeyDown={uploading}
+        >
+          <DialogTitle>Confirmar envío</DialogTitle>
+          <DialogContent>
+            ¿Está seguro que desea subir este documento?
+          </DialogContent>
+          <DialogActions>
+            <Button 
+              onClick={() => setConfirmDialogOpen(false)} 
+              disabled={uploading}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              variant="contained" 
+              onClick={handleUpload} 
+              disabled={uploading}
+            >
+              {uploading ? (
+                <>
+                  <CircularProgress size={20} sx={{ mr: 1 }} />
+                  Subiendo...
+                </>
+              ) : (
+                "Confirmar y Subir"
+              )}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </>
   );
 }

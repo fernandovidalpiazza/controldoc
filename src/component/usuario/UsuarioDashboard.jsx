@@ -357,6 +357,199 @@ const UsuarioDashboard = () => {
           
           <Paper elevation={2} sx={{ p: 3, mt: 4 }}>
             <Typography variant="h6" gutterBottom>
+              Estado de Documentos
+            </Typography>
+
+            {uploadedDocuments.length === 0 ? (
+              <Typography color="textSecondary">
+                No hay documentos subidos para esta empresa.
+              </Typography>
+            ) : (
+              <Box sx={{ mb: 4 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+                  {/* Contador de documentos por estado */}
+                  <Paper 
+                    elevation={1} 
+                    sx={{ 
+                      p: 2, 
+                      minWidth: 200, 
+                      bgcolor: 'success.light', 
+                      color: 'success.contrastText',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <Typography variant="h4">
+                      {uploadedDocuments.filter(doc => doc.status === 'Aprobado').length}
+                    </Typography>
+                    <Typography variant="subtitle1">Aprobados</Typography>
+                  </Paper>
+
+                  <Paper 
+                    elevation={1} 
+                    sx={{ 
+                      p: 2, 
+                      minWidth: 200, 
+                      bgcolor: 'error.light', 
+                      color: 'error.contrastText',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <Typography variant="h4">
+                      {uploadedDocuments.filter(doc => doc.status === 'Rechazado').length}
+                    </Typography>
+                    <Typography variant="subtitle1">Rechazados</Typography>
+                  </Paper>
+
+                  <Paper 
+                    elevation={1} 
+                    sx={{ 
+                      p: 2, 
+                      minWidth: 200, 
+                      bgcolor: 'warning.light', 
+                      color: 'warning.contrastText',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <Typography variant="h4">
+                      {uploadedDocuments.filter(doc => doc.status === 'Pendiente de revisión').length}
+                    </Typography>
+                    <Typography variant="subtitle1">Pendientes</Typography>
+                  </Paper>
+                </Box>
+
+                <TableContainer component={Paper} sx={{ mt: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell><b>Documento</b></TableCell>
+                        <TableCell><b>Estado</b></TableCell>
+                        <TableCell><b>Fecha de subida</b></TableCell>
+                        <TableCell><b>Vencimiento</b></TableCell>
+                        <TableCell><b>Comentarios</b></TableCell>
+                        <TableCell><b>Acciones</b></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {uploadedDocuments.map((doc) => {
+                        const requiredDoc = requiredDocuments.find(rd => rd.id === doc.requiredDocumentId);
+                        return (
+                          <TableRow key={doc.id}>
+                            <TableCell>{doc.documentName || (requiredDoc ? requiredDoc.name : 'Documento')}</TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={doc.status || 'Pendiente'}
+                                color={
+                                  doc.status === 'Aprobado' ? 'success' :
+                                  doc.status === 'Rechazado' ? 'error' : 'warning'
+                                }
+                                size="small"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {doc.uploadedAt ? new Date(doc.uploadedAt.seconds * 1000).toLocaleDateString() : '-'}
+                            </TableCell>
+                            <TableCell>
+                              {doc.status === 'Aprobado' && doc.expirationDate ? (
+                                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                  <Typography variant="body2" fontWeight="bold">
+                                    {new Date(doc.expirationDate.seconds * 1000).toLocaleDateString()}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Establecida por administrador
+                                  </Typography>
+                                  {/* Calcular días restantes */}
+                                  {(() => {
+                                    const today = new Date();
+                                    const expiryDate = new Date(doc.expirationDate.seconds * 1000);
+                                    const diffTime = expiryDate - today;
+                                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                    
+                                    let color = 'success.main';
+                                    let text = `${diffDays} días restantes`;
+                                    
+                                    if (diffDays <= 0) {
+                                      color = 'error.main';
+                                      text = 'VENCIDO';
+                                    } else if (diffDays <= 7) {
+                                      color = 'warning.main';
+                                      text = `${diffDays} días (próximo a vencer)`;
+                                    }
+                                    
+                                    return (
+                                      <Typography variant="caption" color={color} sx={{ mt: 0.5 }}>
+                                        {text}
+                                      </Typography>
+                                    );
+                                  })()}
+                                </Box>
+                              ) : '-'}
+                            </TableCell>
+                            <TableCell>
+                              {doc.adminComment ? (
+                                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                  <Typography variant="body2">
+                                    {doc.adminComment}
+                                  </Typography>
+                                  {doc.reviewedBy && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      Por: {doc.reviewedBy}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              ) : '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                {doc.fileURL && (
+                                  <Button 
+                                    size="small" 
+                                    variant="outlined" 
+                                    onClick={() => window.open(doc.fileURL, '_blank')}
+                                  >
+                                    Ver
+                                  </Button>
+                                )}
+                                {doc.status === 'Rechazado' && (
+                                  <Button 
+                                    size="small" 
+                                    variant="contained" 
+                                    color="error"
+                                    onClick={() => {
+                                      // Lógica para volver a subir el documento
+                                      if (doc.entityType === 'company') {
+                                        setTabValue(3);
+                                      } else if (doc.entityType === 'employee') {
+                                        setSelectedPersona({id: doc.entityId});
+                                        setSelectedDocumentId(doc.requiredDocumentId);
+                                        setOpenDocumentosDialog(true);
+                                      } else if (doc.entityType === 'vehicle') {
+                                        setSelectedVehiculo({id: doc.entityId});
+                                        setSelectedDocumentId(doc.requiredDocumentId);
+                                        setOpenDocumentosDialog(true);
+                                      }
+                                    }}
+                                  >
+                                    Subir nuevamente
+                                  </Button>
+                                )}
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            <Typography variant="h6" gutterBottom>
               Lista de Documentos Requeridos
             </Typography>
 
